@@ -1,5 +1,6 @@
 # coding: utf-8
-
+import os
+import sys
 from datetime import datetime
 from dataclasses import dataclass, field
 from enum import Enum
@@ -156,7 +157,7 @@ class InstalledGame:
     def from_json(cls, json):
         tmp = cls(
             app_name=json.get('app_name', ''),
-            install_path=json.get('install_path', ''),
+            install_path=json.get(f'install_path_{sys.platform}', ''),
             title=json.get('title', ''),
             version=json.get('version', ''),
         )
