@@ -1,6 +1,8 @@
 # !/usr/bin/env python
 # coding: utf-8
 
+import urllib.parse
+
 import requests
 import requests.adapters
 import logging
@@ -53,6 +55,11 @@ class EPCAPI:
         else:
             self.request_timeout = None
 
+    def get_auth_url(self):
+        login_url = 'https://www.epicgames.com/id/login?redirectUrl='
+        redirect_url = f'https://www.epicgames.com/id/api/redirect?clientId={self._user_basic}&responseType=code'
+        return login_url + urllib.parse.quote(redirect_url)
+
     def update_egs_params(self, egs_params):
         # update user-agent
         if version := egs_params['version']:
@@ -87,7 +94,7 @@ class EPCAPI:
         return self.user
 
     def start_session(self, refresh_token: str = None, exchange_token: str = None,
-                      client_credentials: bool = False) -> dict:
+                      authorization_code: str = None, client_credentials: bool = False) -> dict:
         if refresh_token:
             params = dict(grant_type='refresh_token',
                           refresh_token=refresh_token,
@@ -95,6 +102,10 @@ class EPCAPI:
         elif exchange_token:
             params = dict(grant_type='exchange_code',
                           exchange_code=exchange_token,
+                          token_type='eg1')
+        elif authorization_code:
+            params = dict(grant_type='authorization_code',
+                          code=authorization_code,
                           token_type='eg1')
         elif client_credentials:
             params = dict(grant_type='client_credentials',

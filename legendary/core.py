@@ -15,7 +15,7 @@ from locale import getdefaultlocale
 from multiprocessing import Queue
 from platform import system
 from requests import session
-from requests.exceptions import HTTPError
+from requests.exceptions import HTTPError, ConnectionError
 from sys import platform as sys_platform
 from uuid import uuid4
 from urllib.parse import urlencode, parse_qsl
@@ -77,7 +77,8 @@ class LegendaryCore:
         self.local_timezone = datetime.now().astimezone().tzinfo
         self.language_code, self.country_code = ('en', 'US')
 
-        if locale := self.lgd.config.get('Legendary', 'locale', fallback=getdefaultlocale()[0]):
+        if locale := self.lgd.config.get('Legendary', 'locale',
+                                         fallback=getdefaultlocale(('LANG', 'LANGUAGE', 'LC_ALL', 'LC_CTYPE'))[0]):
             try:
                 self.language_code, self.country_code = locale.split('-' if '-' in locale else '_')
                 self.log.debug(f'Set locale to {self.language_code}-{self.country_code}')
@@ -130,7 +131,18 @@ class LegendaryCore:
 
     def auth_code(self, code) -> bool:
         """
-        Handles authentication via exchange code (either retrieved manually or automatically)
+        Handles authentication via authorization code (either retrieved manually or automatically)
+        """
+        try:
+            self.lgd.userdata = self.egs.start_session(authorization_code=code)
+            return True
+        except Exception as e:
+            self.log.error(f'Logging in failed with {e!r}, please try again.')
+            return False
+
+    def auth_ex_token(self, code) -> bool:
+        """
+        Handles authentication via exchange token (either retrieved manually or automatically)
         """
         try:
             self.lgd.userdata = self.egs.start_session(exchange_token=code)
@@ -229,7 +241,7 @@ class LegendaryCore:
             self.log.error('Stored credentials are no longer valid! Please login again.')
             self.lgd.invalidate_userdata()
             return False
-        except HTTPError as e:
+        except (HTTPError, ConnectionError) as e:
             self.log.error(f'HTTP request for login failed: {e!r}, please try again later.')
             return False
 
@@ -850,6 +862,18 @@ class LegendaryCore:
             if not wine_pfx:
                 wine_pfx = self.lgd.config.get('default.env', 'WINEPREFIX', fallback=None)
                 wine_pfx = self.lgd.config.get('default', 'wine_prefix', fallback=wine_pfx)
+
+            # If we still didn't find anything, try to read the prefix from the environment variables of this process
+            if not wine_pfx and sys_platform == 'darwin':
+                cx_bottle = os.getenv('CX_BOTTLE')
+                if cx_bottle and mac_is_valid_bottle(cx_bottle):
+                    wine_pfx = mac_get_bottle_path(cx_bottle)
+
+            if not wine_pfx:
+                proton_pfx = os.getenv('STEAM_COMPAT_DATA_PATH')
+                if proton_pfx:
+                    wine_pfx = f'{proton_pfx}/pfx'
+                wine_pfx = os.getenv('WINEPREFIX', wine_pfx)
 
             # if all else fails, use the WINE default
             if not wine_pfx:
